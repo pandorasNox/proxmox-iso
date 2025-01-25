@@ -14,19 +14,110 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: "debug"
+        run: |-
+          DEBIAN_FRONTEND=noninteractive;
+          set -x;
+          
+          command -v docker;
+          ls -al /dev/kvm;
+          command -v kvm || true;
 
+          docker ps;
+
+          set +x;
+
+      - name: "debug: docker"
+        run: |
+          DEBIAN_FRONTEND=noninteractive;
+
+          sudo apt install cpu-checker;
+          sudo kvm-ok;
+
+          #             -e "BOOT=http://example.com/image.iso" \
+          #            --cap-add NET_ADMIN \
+          #            --device=/dev/net/tun \
+          #docker run -t --rm \
+          #  -p 8006:8006 \
+          #  --device=/dev/kvm \
+          #  --entrypoint=/bin/bash \
+          #  ghcr.io/qemus/qemu-docker:6.13 \
+          #  -c "ls -al" \
+          #;
+
+          docker build \
+            --file=Dockerfile \
+            --target=kvm-proxmox-vm-img-builder \
+            --tag=proxmox-vm-build:latest \
+            --progress=plain \
+            . \
+          ;
+
+      #             proxmox-auto-install-assistant \
+      # echo "debug: apt-get install binfmt-support";
+      # sudo apt-get install -q -y \
+      #   binfmt-support \
+      #   curl \
+      #   qemu-system-aarch64 \ 
+      #   qemu-efi \
+      #   qemu-user-static \
+      #   tree \
+      # ;
+      # echo "debug: apt-get install qemu-efi";
+      # sudo apt-get install -q -y \
+      #   qemu-efi \
+      # ;
+      #           sudo echo "deb [arch=amd64] http://download.proxmox.com/debian/pve bookworm pve-no-subscription" > /etc/apt/sources.list.d/pve-install-repo.list
       - name: "installe qemu & co"
         run: |
           DEBIAN_FRONTEND=noninteractive;
-          sudo apt-get update -q -y && sudo apt-get install -q -y \
+
+          echo "run architecture: $(uname -a)"
+
+          sudo wget https://enterprise.proxmox.com/debian/proxmox-release-bookworm.gpg \
+            -O /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg \
+          ;
+
+          printf '%s' \
+            "7da6fe34168adc6e479327ba517796d4702fa2f8b4f0a9833f5ea6e6b48f6507a6da403a274fe201595edc86a84463d50383d07f64bdde2e3658108db7d6dc87 /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg" \
+            > proxmox-gpg.checksumfile.sha512 \
+          ;
+
+          sha512sum -c proxmox-gpg.checksumfile.sha512;
+
+          sudo add-apt-repository "deb [arch=amd64] http://download.proxmox.com/debian/pve bookworm pve-no-subscription"
+
+          echo "debug: apt-get update";
+          sudo apt-get update -q -y;
+
+          echo "debug: apt-get install binfmt-support";
+          sudo apt-get install -q -y \
             binfmt-support \
+          ;
+
+          echo "debug: apt-get install curl";
+          sudo apt-get install -q -y \
             curl \
-            proxmox-auto-install-assistant \
-            qemu-system-aarch64 \ 
-            qemu-efi \
+          ;
+
+          sudo apt-cache search qemu;
+
+          echo "debug: apt-get install qemu-system-x86";
+          sudo apt-get install -q -y \
+            qemu-system-x86 \
+          ;
+
+          echo "debug: apt-get install qemu-user-static";
+          sudo apt-get install -q -y \
             qemu-user-static \
+          ;
+
+          echo "debug: apt-get install tree";
+          sudo apt-get install -q -y \
             tree \
           ;
+
+          sudo apt-cache search proxmox;
 
       - name: "download proxmox iso"
         run: |
@@ -45,6 +136,7 @@ jobs:
               --retry-max-time "$((60 * 15))" \
               --write-out "%{http_code}" \
               --output ${OUTPUT_FILE} \
+              "${PROXMOX_ISO_URL}" \
           );
 
           if [[ ${HTTP_CODE} -lt 200 || ${HTTP_CODE} -gt 299 ]] ; then
