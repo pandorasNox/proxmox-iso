@@ -1,0 +1,56 @@
+
+name: "build proxmox image with auto answer (answer file)"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "installe qemu & co"
+        run: |
+          DEBIAN_FRONTEND=noninteractive;
+          sudo apt-get update -q -y && sudo apt-get install -q -y \
+            binfmt-support \
+            curl \
+            proxmox-auto-install-assistant \
+            qemu-system-aarch64 \ 
+            qemu-efi \
+            qemu-user-static \
+            tree \
+          ;
+
+      - name: "download proxmox iso"
+        run: |
+          DEBIAN_FRONTEND=noninteractive;
+
+          PROXMOX_ISO_URL='https://enterprise.proxmox.com/iso/proxmox-ve_8.3-1.iso';
+          OUTPUT_FILE_NAME='proxmox-ve_8.3-1.iso'
+          OUTPUT_FILE=$(mktemp ${OUTPUT_FILE_NAME}.XXXXXX)
+
+          HTTP_CODE=$( \
+            curl \
+              --max-time "$((60 * 30))" \
+              --connect-timeout 10 \
+              --retry 3 \
+              --retry-delay 5 \
+              --retry-max-time "$((60 * 15))" \
+              --write-out "%{http_code}" \
+              --output ${OUTPUT_FILE} \
+          );
+
+          if [[ ${HTTP_CODE} -lt 200 || ${HTTP_CODE} -gt 299 ]] ; then
+            printf '%s' "error: http_status_code=${HTTP_CODE}"
+            return 22
+          fi
+
+          ls "${OUTPUT_FILE}";
+      #
